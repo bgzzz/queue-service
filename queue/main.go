@@ -54,7 +54,9 @@ func handleQueues(w http.ResponseWriter, req *http.Request,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(js)
+	if _, err := w.Write(js); err != nil {
+		log.Error(err)
+	}
 }
 
 func extractQueueName(url string) (string, error) {
@@ -97,7 +99,9 @@ func main() {
 
 	log := logrus.NewEntry(logger)
 
-	http.ListenAndServe(":8090", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+	if err := http.ListenAndServe(":8090", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		handleQueues(w, req, queueSrv, log)
-	}))
+	})); err != nil {
+		log.Error(err)
+	}
 }
