@@ -11,6 +11,7 @@ type Msg struct {
 type Queue struct {
 	msgs map[int]Msg
 
+	pushingIndex int
 	pullingIndex int
 }
 
@@ -22,7 +23,8 @@ func NewQueue() *Queue {
 }
 
 func (q *Queue) Push(m Msg) {
-	q.msgs[m.LineNumber] = m
+	q.msgs[q.pushingIndex] = m
+	q.pushingIndex++
 }
 
 func (q *Queue) Pull() *Msg {
@@ -39,6 +41,7 @@ func (q *Queue) Pull() *Msg {
 		return &result
 	}
 
+	delete(q.msgs, q.pullingIndex)
 	q.pullingIndex++
 
 	return &msg

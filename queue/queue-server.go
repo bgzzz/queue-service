@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"sync"
 
 	"github.com/bgzzz/queue-service/pkg/queuelib"
@@ -29,4 +30,22 @@ func (qs *QueueServer) AddToQueue(qName string, msg *queuelib.Msg) {
 	}
 
 	q.Push(*msg)
+}
+
+func (qs *QueueServer) RemoveFromQueue(qName string) (*queuelib.Msg, error) {
+	qs.mtx.RLock()
+	defer qs.mtx.RUnlock()
+
+	q, ok := qs.Queues[qName]
+	if !ok {
+		return nil, errors.New("queue does not exist")
+	}
+
+	msg := q.Pull()
+	if msg == nil {
+		return nil, errors.New("queue is empty")
+	}
+
+	return msg, nil
+
 }
