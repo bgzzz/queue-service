@@ -15,4 +15,6 @@
 # vendor/
 bin
 help
+file.txt
+file-out.txt
 

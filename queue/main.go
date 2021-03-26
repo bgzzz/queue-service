@@ -14,13 +14,14 @@ import (
 func handleQueues(w http.ResponseWriter, req *http.Request,
 	queueSrv *QueueServer, log *logrus.Entry) {
 
+	qName, err := extractQueueName(req.URL.Path)
+	if err != nil {
+		log.Error(err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	if req.Method == http.MethodPost {
-		qName, err := extractQueueName(req.URL.Path)
-		if err != nil {
-			log.Error(err)
-			http.Error(w, "queue is unspecified in url", http.StatusBadRequest)
-			return
-		}
 
 		msg := queuelib.Msg{}
 		if err := json.NewDecoder(req.Body).Decode(&msg); err != nil {
@@ -38,13 +39,6 @@ func handleQueues(w http.ResponseWriter, req *http.Request,
 		return
 	}
 
-	qName, err := extractQueueName(req.URL.Path)
-	if err != nil {
-		log.Error(err)
-		http.Error(w, "queue is unspecified in url", http.StatusBadRequest)
-		return
-	}
-
 	msg, err := queueSrv.RemoveFromQueue(qName)
 	if err != nil {
 		log.Error(err)
@@ -54,6 +48,7 @@ func handleQueues(w http.ResponseWriter, req *http.Request,
 
 	js, err := json.Marshal(msg)
 	if err != nil {
+		log.Error(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -65,15 +60,19 @@ func handleQueues(w http.ResponseWriter, req *http.Request,
 func extractQueueName(url string) (string, error) {
 	tmp := strings.Split(url, "/")
 
-	if len(tmp) != 2 {
+	if len(tmp) != 3 {
 		return "", errors.New("unable to find queue name")
 	}
 
-	return tmp[1], nil
+	if tmp[1] != "queues" {
+		return "", errors.New("unsupported resource")
+	}
+
+	return tmp[2], nil
 }
 
 func (qs *QueueServer) RemoveFromQueue(qName string) (*queuelib.Msg, error) {
-	qs.mtx.Lock()
+	qs.mtx.RLock()
 	defer qs.mtx.RUnlock()
 
 	q, ok := qs.Queues[qName]
@@ -98,9 +97,7 @@ func main() {
 
 	log := logrus.NewEntry(logger)
 
-	http.HandleFunc("/queues", func(w http.ResponseWriter, req *http.Request) {
+	http.ListenAndServe(":8090", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		handleQueues(w, req, queueSrv, log)
-	})
-
-	http.ListenAndServe(":8090", nil)
+	}))
 }

@@ -9,7 +9,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path"
 
 	"github.com/bgzzz/queue-service/pkg/queuelib"
 	"github.com/google/uuid"
@@ -33,7 +32,7 @@ func main() {
 
 			logger := logrus.New()
 			debug := c.Bool(flagDebug)
-			isWrite := c.Bool(flagDebug)
+			isWrite := c.Bool(flagWriteMode)
 
 			if debug {
 				logger.SetLevel(logrus.DebugLevel)
@@ -45,7 +44,9 @@ func main() {
 
 			queueName := c.String(flagQueueName)
 
-			return run(log, isWrite, f, queueName, flagQueueService)
+			queueService := c.String(flagQueueService)
+
+			return run(log, isWrite, f, queueName, queueService)
 		},
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
@@ -85,7 +86,7 @@ func main() {
 
 func run(log *logrus.Entry, isWrite bool, f, qName, qServiceName string) error {
 	// validate queue connection
-	resp, err := http.Get(path.Join(qServiceName, "queues",
+	resp, err := http.Get(fmt.Sprintf("%s/queues/%s", qServiceName,
 		uuid.NewString()))
 	if err != nil {
 		return errors.Wrap(err, "unable to check queue connection")
@@ -105,10 +106,14 @@ func run(log *logrus.Entry, isWrite bool, f, qName, qServiceName string) error {
 
 		w := bufio.NewWriter(file)
 		for {
-			resp, err := http.Get(path.Join(qServiceName, "queues",
+			resp, err := http.Get(fmt.Sprintf("%s/queues/%s", qServiceName,
 				qName))
 			if err != nil {
 				return errors.Wrap(err, "pull from queue")
+			}
+
+			if resp.StatusCode != http.StatusOK {
+				return errors.New("unsuccessful response from queue")
 			}
 
 			b, err := ioutil.ReadAll(resp.Body)
@@ -118,15 +123,16 @@ func run(log *logrus.Entry, isWrite bool, f, qName, qServiceName string) error {
 
 			var msg queuelib.Msg
 			if err := json.Unmarshal(b, &msg); err != nil {
-				return errors.Wrap(err, "unable to marshal response")
+				return errors.Wrap(err, "unable to unmarshal response")
 			}
-
-			log.Info("read line %v from queue %v", msg.Msg, qName)
-			fmt.Fprintln(w, msg.Msg)
 
 			if msg.LineNumber == -1 {
 				break
 			}
+
+			log.Infof("read line %v from queue %v", msg.Msg, qName)
+			fmt.Fprintln(w, msg.Msg)
+
 		}
 		w.Flush()
 		return nil
@@ -173,7 +179,8 @@ func sendMsg(line, qServiceName, qName string, indx int) error {
 		return errors.Wrap(err, "unable to marshal request")
 	}
 
-	resp, err := http.Post(path.Join(qServiceName, qName),
+	resp, err := http.Post(fmt.Sprintf("%s/queues/%s",
+		qServiceName, qName),
 		"application/json", bytes.NewBuffer(b))
 	if err != nil {
 		return errors.Wrap(err, "unable to push message to the queue")

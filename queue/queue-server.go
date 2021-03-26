@@ -19,7 +19,7 @@ func NewQueueSrv() *QueueServer {
 
 func (qs *QueueServer) AddToQueue(qName string, msg *queuelib.Msg) {
 	qs.mtx.Lock()
-	defer qs.mtx.RUnlock()
+	defer qs.mtx.Unlock()
 
 	q, ok := qs.Queues[qName]
 	if !ok {
